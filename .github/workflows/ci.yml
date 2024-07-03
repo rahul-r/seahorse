@@ -1,0 +1,40 @@
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches:
+      - main
+
+name: CI
+
+jobs:
+  build:
+    name: Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        go-version: ["1.22"]
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+      - name: Display Go version
+        run: go version
+      - name: Install dependencies
+        run: |
+          go get .
+      - name: Build
+        run: go build -o seahorse-${{ matrix.os }}
+      - name: Test with the Go CLI
+        run: go test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: seahorse-${{ matrix.os }}
+          path: seahorse-${{ matrix.os }}
