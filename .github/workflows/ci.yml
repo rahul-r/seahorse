@@ -21,6 +21,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - name: Update tailwindcss
+        uses: ZoeyVid/tailwindcss-update@main
+        with:
+          input: style/tailwind.css
+          output: public/tailwind.css
       - name: Setup Go ${{ matrix.go-version }}
         uses: actions/setup-go@v5
         with:
