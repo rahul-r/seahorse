@@ -25,7 +25,7 @@ jobs:
         uses: ZoeyVid/tailwindcss-update@main
         with:
           input: style/tailwind.css
-          output: public/tailwind.css
+          output: public/styles.css
       - name: Setup Go ${{ matrix.go-version }}
         uses: actions/setup-go@v5
         with:

@@ -8,6 +8,6 @@ services:
       - 3001:3001 # http
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ../compose-templates:/compose-templates:ro
+      - ./compose-templates:/compose-templates:ro
       - ./config.yml:/config.yml
-      - ../environment:/environment:ro
+      - ./environment:/environment:ro
