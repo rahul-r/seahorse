@@ -1,0 +1,5 @@
+port: 3001
+template_dir: ./compose_templates
+output_dir: ./compose_generated
+env_file: environment
+docker_host: ssh://username@hostname

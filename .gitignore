@@ -1,0 +1,18 @@
+tailwindcss
+public/tailwind.css
+config.yml
+seahorse
+tmp
+.env
+
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace file
+go.work
+go.work.sum
