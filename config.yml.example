@@ -1,4 +1,4 @@
-port: 3001
+port: 9843
 template_dir: ./compose_templates
 output_dir: ./compose_generated
 env_file: environment
