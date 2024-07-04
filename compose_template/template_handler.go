@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,9 @@ import (
 
 	"github.com/Masterminds/sprig"
 	"gopkg.in/yaml.v3"
+
+	"seahorse/config"
+	"seahorse/containers"
 )
 
 type ValuesMap map[string]interface{}
@@ -87,6 +91,7 @@ func ProcessFile(templateFilePath, outputFilePath string) error {
 func ProcessDir(templatesDir, outputDir string) error {
 	fileInfo, err := os.Stat(templatesDir)
 	if err != nil {
+		log.Printf("Cannot access directory `%s`\n", templatesDir)
 		return err
 	}
 	if !fileInfo.IsDir() {
@@ -136,31 +141,8 @@ func ProcessDir(templatesDir, outputDir string) error {
 	})
 }
 
-type ContainerInfo struct {
-	Name        string
-	TemplateDir string
-	ID          string `json:"Id"`
-	Image       string
-	ImageID     string
-	Command     string
-	Created     int64
-	SizeRw      int64 `json:",omitempty"`
-	SizeRootFs  int64 `json:",omitempty"`
-	Labels      map[string]string
-	State       string
-	Status      string
-	HostConfig  struct {
-		NetworkMode string            `json:",omitempty"`
-		Annotations map[string]string `json:",omitempty"`
-	}
-	// Names      []string
-	// Ports      []Port
-	// NetworkSettings *SummaryNetworkSettings
-	// Mounts          []MountPoint
-}
-
-func ScanDir(templatesDir string) (*map[string]ContainerInfo, error) {
-	containers := make(map[string]ContainerInfo, 0)
+func ScanDir(templatesDir string) (*map[string]containers.ContainerInfo, error) {
+	containerMap := make(map[string]containers.ContainerInfo, 0)
 
 	filepath.Walk(templatesDir, func(templatePath string, templateFileInfo os.FileInfo, err error) error {
 		if err != nil {
@@ -183,11 +165,51 @@ func ScanDir(templatesDir string) (*map[string]ContainerInfo, error) {
 				log.Fatalf("Cannot create absolute path to %s: %s", templatePath, err)
 				return nil
 			}
-			containers[name] = ContainerInfo{Name: name, TemplateDir: absPath}
+			containerMap[name] = containers.ContainerInfo{Name: name, TemplateDir: absPath}
 		}
 
 		return nil
 	})
 
-	return &containers, nil
+	return &containerMap, nil
+}
+
+func InstallCompose(containerName string, containerClient *containers.Containers, config *config.Config) error {
+	tmpDir, err := os.MkdirTemp("", "")
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	tmpDir = path.Join(tmpDir, containerName)
+	err = os.Mkdir(tmpDir, os.ModePerm)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	err = ProcessDir((*containerClient.GetContainerMap())[containerName].TemplateDir, tmpDir)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	cmd := exec.Command("bash", "-c", `
+			set -e
+			docker compose --env-file $ENV_FILE pull
+			docker compose --env-file $ENV_FILE up -d --remove-orphans
+		`)
+	cmd.Dir = tmpDir
+	cmd.Env = append(os.Environ(), fmt.Sprintf("DOCKER_HOST=%s", config.DockerHost), fmt.Sprintf("ENV_FILE=%s", config.EnvironmentFile))
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err = cmd.Run()
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	return nil
 }

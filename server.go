@@ -2,18 +2,16 @@ package main
 
 import (
 	"bytes"
+	"embed"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"net/url"
-	"os"
-	"os/exec"
-	"path"
 	"strconv"
 
-	"embed"
 	"seahorse/compose_template"
+	"seahorse/config"
 	"seahorse/containers"
 )
 
@@ -134,7 +132,7 @@ func containerRestartHandler(client *containers.Containers) http.HandlerFunc {
 	}
 }
 
-func composeInstallHandler(containerClient *containers.Containers, environmentFile string, dockerHost string) http.HandlerFunc {
+func composeInstallHandler(containerClient *containers.Containers, config *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		u, err := url.Parse(r.URL.String())
 		if err != nil {
@@ -146,40 +144,7 @@ func composeInstallHandler(containerClient *containers.Containers, environmentFi
 		params := u.Query()
 		containerName := params.Get("container")
 
-		tmpDir, err := os.MkdirTemp("", "")
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Fatal(err)
-			return
-		}
-		defer os.RemoveAll(tmpDir)
-
-		tmpDir = path.Join(tmpDir, containerName)
-		err = os.Mkdir(tmpDir, os.ModePerm)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Fatal(err)
-			return
-		}
-		defer os.RemoveAll(tmpDir)
-
-		err = compose_template.ProcessDir((*containerClient.GetContainerMap())[containerName].TemplateDir, tmpDir)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Fatal(fmt.Sprintf("Cannot process template for %s: %s", containerName, err))
-			return
-		}
-
-		cmd := exec.Command("bash", "-c", `
-			set -e
-			docker compose --env-file $ENV_FILE pull
-			docker compose --env-file $ENV_FILE up -d --remove-orphans
-		`)
-		cmd.Dir = tmpDir
-		cmd.Env = append(os.Environ(), fmt.Sprintf("DOCKER_HOST=%s", dockerHost), fmt.Sprintf("ENV_FILE=%s", environmentFile))
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		err = cmd.Run()
+		err = compose_template.InstallCompose(containerName, containerClient, config)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			log.Fatal(err)
@@ -198,7 +163,7 @@ func composeInstallHandler(containerClient *containers.Containers, environmentFi
 	}
 }
 
-func startServer(config *Config, containerClient *containers.Containers) {
+func startServer(config *config.Config, containerClient *containers.Containers) {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", indexHandler(containerClient))
@@ -207,8 +172,8 @@ func startServer(config *Config, containerClient *containers.Containers) {
 	mux.HandleFunc("/start", containerStartHandler(containerClient))
 	mux.HandleFunc("/stop", containerStopHandler(containerClient))
 	mux.HandleFunc("/restart", containerRestartHandler(containerClient))
-	mux.HandleFunc("/install", composeInstallHandler(containerClient, config.EnvironmentFile, config.DockerHost))
-	mux.HandleFunc("/update", composeInstallHandler(containerClient, config.EnvironmentFile, config.DockerHost)) // Run same handler for install and update
+	mux.HandleFunc("/install", composeInstallHandler(containerClient, config))
+	mux.HandleFunc("/update", composeInstallHandler(containerClient, config)) // Run same handler for install and update
 
 	fmt.Printf("Running HTTP server on port %d\n", config.Port)
 	http.ListenAndServe(":"+strconv.Itoa(config.Port), mux)

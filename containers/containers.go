@@ -9,14 +9,35 @@ import (
 	"os"
 	"strings"
 
-	"seahorse/compose_template"
-
 	"github.com/docker/cli/cli/connhelper"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 )
 
-type ComposeMap map[string]compose_template.ContainerInfo
+type ContainerInfo struct {
+	Name        string
+	TemplateDir string
+	ID          string `json:"Id"`
+	Image       string
+	ImageID     string
+	Command     string
+	Created     int64
+	SizeRw      int64 `json:",omitempty"`
+	SizeRootFs  int64 `json:",omitempty"`
+	Labels      map[string]string
+	State       string
+	Status      string
+	HostConfig  struct {
+		NetworkMode string            `json:",omitempty"`
+		Annotations map[string]string `json:",omitempty"`
+	}
+	// Names      []string
+	// Ports      []Port
+	// NetworkSettings *SummaryNetworkSettings
+	// Mounts          []MountPoint
+}
+
+type ComposeMap map[string]ContainerInfo
 
 type Containers struct {
 	client       *client.Client
@@ -102,7 +123,7 @@ func (self *Containers) CreateContainerMap(input ComposeMap) error {
 			input[name] = entry
 		} else {
 			// key does not exist in the map
-			input[name] = compose_template.ContainerInfo{
+			input[name] = ContainerInfo{
 				ID:    ctr.ID,
 				Image: ctr.Image,
 				State: ctr.State,

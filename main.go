@@ -6,15 +6,16 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"seahorse/compose_template"
-	"seahorse/containers"
 
-	"gopkg.in/yaml.v3"
+	"seahorse/compose_template"
+	"seahorse/config"
+	"seahorse/containers"
 )
 
-func parseCommandLineArgs() (string, string) {
+func parseCommandLineArgs() (string, string, string) {
 	dirFlag := flag.String("dir", "", "Directory containing template files")
 	fileFlag := flag.String("file", "", "Single template file to process")
+	installFlag := flag.String("install", "", "Install the container")
 	helpFlag := flag.Bool("help", false, "Print help message")
 	flag.StringVar(dirFlag, "d", "", "Directory containing template files (shorthand)")
 	flag.StringVar(fileFlag, "f", "", "Single template file to process (shorthand)")
@@ -24,91 +25,53 @@ func parseCommandLineArgs() (string, string) {
 	if *helpFlag {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
 		flag.PrintDefaults()
-		return "", ""
+		return "", "", ""
 	}
 
-	return *dirFlag, *fileFlag
-}
-
-type Config struct {
-	Port            int    `yaml:"port"`
-	TemplatesDir    string `yaml:"template_dir"`
-	OutputDir       string `yaml:"output_dir"`
-	EnvironmentFile string `yaml:"env_file"`
-	DockerHost      string `yaml:"docker_host"`
-	useRemoteDocker bool
-}
-
-func LoadConfig(filename string) (*Config, error) {
-	defaultConfig := &Config{
-		Port:            9843,
-		TemplatesDir:    "/compose-templates",
-		OutputDir:       "/tmp/compose-output",
-		EnvironmentFile: "/environment",
-		DockerHost:      "",
-		useRemoteDocker: false,
-	}
-
-	// Check if the file exists
-	_, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		// File doesn't exist, return default config
-		return defaultConfig, nil
-	} else if err != nil {
-		// Other error occurred
-		return defaultConfig, err
-	}
-
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return defaultConfig, err
-	}
-
-	var config Config
-	err = yaml.Unmarshal(data, &config)
-	if err != nil {
-		return defaultConfig, err
-	}
-
-	// If any configuration value is missing, use the default value
-	if config.Port == 0 {
-		log.Printf("port config not supplied,, using default value `%d`", defaultConfig.Port)
-		config.Port = defaultConfig.Port
-	}
-	if config.TemplatesDir == "" {
-		log.Printf("template_dir config not supplied,, using default value `%s`", defaultConfig.TemplatesDir)
-		config.TemplatesDir = defaultConfig.TemplatesDir
-	}
-	if config.OutputDir == "" {
-		log.Printf("output_dir config not supplied, using default value `%s`", defaultConfig.OutputDir)
-		config.OutputDir = defaultConfig.OutputDir
-	}
-	if config.EnvironmentFile == "" {
-		log.Printf("env_file config not supplied, using default value `%s`", defaultConfig.EnvironmentFile)
-		config.EnvironmentFile = defaultConfig.EnvironmentFile
-	}
-	if config.DockerHost == "" {
-		log.Println("docker_host config not supplied,, using local docker")
-		config.DockerHost = defaultConfig.DockerHost
-		config.useRemoteDocker = false
-	} else {
-		config.useRemoteDocker = true
-	}
-
-	return &config, nil
+	return *dirFlag, *fileFlag, *installFlag
 }
 
 func main() {
 	// Enable line numbers in log messages
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	config, err := LoadConfig("config.yml")
+	config, err := config.LoadConfig("config.yml")
 	if err != nil {
 		log.Println(err)
 		log.Println("Using default config values")
 	}
 
-	dirPath, filePath := parseCommandLineArgs()
+	dirPath, filePath, installContainer := parseCommandLineArgs()
+
+	if installContainer != "" {
+		fmt.Printf("Installing container %s\n", installContainer)
+
+		var containerClient containers.Containers
+		if config.UseRemoteDocker {
+			containerClient = containers.NewRemoteClient(config.DockerHost)
+		} else {
+			containerClient = containers.NewLocalClient()
+		}
+
+		composeFiles, err := compose_template.ScanDir(config.TemplatesDir)
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+
+		err = containerClient.CreateContainerMap(*composeFiles)
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+
+		err = compose_template.InstallCompose(installContainer, &containerClient, config)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	if len(os.Args) == 1 {
 		composeFiles, err := compose_template.ScanDir(config.TemplatesDir)
 		if err != nil {
@@ -117,7 +80,7 @@ func main() {
 		}
 
 		var containerClient containers.Containers
-		if config.useRemoteDocker {
+		if config.UseRemoteDocker {
 			containerClient = containers.NewRemoteClient(config.DockerHost)
 		} else {
 			containerClient = containers.NewLocalClient()
