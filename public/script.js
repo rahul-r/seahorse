@@ -1,12 +1,15 @@
 function start(containerName) {
+  document.getElementById("spinner").style.display = 'block';
   startStop(containerName, true);
 }
 
 function stop(containerName) {
+  document.getElementById("spinner").style.display = 'block';
   startStop(containerName, false);
 }
 
 function restart(containerName) {
+  document.getElementById("spinner").style.display = 'block';
   startStop(containerName, false);
   startStop(containerName, true);
 }
@@ -22,6 +25,7 @@ function startStop(containerName, isStart) {
 }
 
 function update(containerName) {
+  document.getElementById("spinner").style.display = 'block';
   fetch("/update", {
     method: "POST",
     body: containerName,
@@ -31,6 +35,7 @@ function update(containerName) {
 }
 
 function install(containerName) {
+  document.getElementById("spinner").style.display = 'block';
   fetch("/install", {
     method: "POST",
     body: containerName,
