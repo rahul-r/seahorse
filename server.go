@@ -5,9 +5,9 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"strconv"
 
 	"seahorse/compose_template"
@@ -40,16 +40,19 @@ func indexHandler(containerClient *containers.Containers) http.HandlerFunc {
 
 func containerStartHandler(client *containers.Containers) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		u, err := url.Parse(r.URL.String())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Fatal(err)
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		params := u.Query()
-		containerName := params.Get("container")
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Error reading request body", http.StatusInternalServerError)
+			return
+		}
+		defer r.Body.Close()
 
+		containerName := string(body)
 		client.Start(containerName)
 
 		if entry, ok := (*client.GetContainerMap())[containerName]; ok {
@@ -71,16 +74,19 @@ func containerStartHandler(client *containers.Containers) http.HandlerFunc {
 
 func containerStopHandler(client *containers.Containers) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		u, err := url.Parse(r.URL.String())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Fatal(err)
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		params := u.Query()
-		containerName := params.Get("container")
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Error reading request body", http.StatusInternalServerError)
+			return
+		}
+		defer r.Body.Close()
 
+		containerName := string(body)
 		client.Stop(containerName)
 
 		if entry, ok := (*client.GetContainerMap())[containerName]; ok {
@@ -102,16 +108,19 @@ func containerStopHandler(client *containers.Containers) http.HandlerFunc {
 
 func containerRestartHandler(client *containers.Containers) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		u, err := url.Parse(r.URL.String())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Fatal(err)
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		params := u.Query()
-		containerName := params.Get("container")
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Error reading request body", http.StatusInternalServerError)
+			return
+		}
+		defer r.Body.Close()
 
+		containerName := string(body)
 		client.Stop(containerName)
 		client.Start(containerName)
 
@@ -134,15 +143,19 @@ func containerRestartHandler(client *containers.Containers) http.HandlerFunc {
 
 func composeInstallHandler(containerClient *containers.Containers, config *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		u, err := url.Parse(r.URL.String())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Fatal(err)
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		params := u.Query()
-		containerName := params.Get("container")
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Error reading request body", http.StatusInternalServerError)
+			return
+		}
+		defer r.Body.Close()
+
+		containerName := string(body)
 
 		err = compose_template.InstallCompose(containerName, containerClient, config)
 		if err != nil {
